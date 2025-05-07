@@ -1,120 +1,59 @@
 local M = {}
 
-function M.init(modules)
-    local config = modules.config
-    local state = modules.state
-    local ai = modules.ai
+function M.Init(Modules)
+    local Config, State, Ai = Modules.Config, Modules.State, Modules.Ai
+    local Player = game:GetService("Players").LocalPlayer
+    local Gui = Player:WaitForChild("PlayerGui", 5)
+    local MainMenu = Gui:FindFirstChild("MainMenu")
+    local SideFrame = MainMenu and MainMenu:FindFirstChild("SideFrame")
+    if not SideFrame then return warn("SideFrame not found. Aborting UI injection.") end
+    if SideFrame:FindFirstChild("AiFrame") then return warn("Chess AI toggle UI already injected.") end
 
-    local aiRunning = false
+    local Frame = Instance.new("Frame", SideFrame)
+    Frame.Name, Frame.AnchorPoint, Frame.Size, Frame.LayoutOrder = "AiFrame", Vector2.new(0, .45), UDim2.new(1,0,0.045,0), 99
+    Frame.BackgroundColor3 = Config.COLORS.Off.Background
 
-    -- Wait for GUI to be present
-    local player = game:GetService("Players").LocalPlayer
-    local playerGui = player:WaitForChild("PlayerGui")
-
-    -- Wait for the existing structure
-    local mainMenu = playerGui:WaitForChild("MainMenu", 5)
-    local sideFrame = mainMenu and mainMenu:WaitForChild("SideFrame", 5)
-
-    if not sideFrame then
-        warn("SideFrame not found. Aborting UI injection.")
-        return
-    end
-    sideFrame.AnchorPoint = Vector2.new(0, 0.45)
-
-    if sideFrame:FindFirstChild("aiFrame") then
-        warn("Chess AI toggle UI already injected.")
-        return
+    local function applyStyle(On)
+        local Style = On and Config.COLORS.On or Config.COLORS.Off
+        Frame.BackgroundColor3 = Style.Background
+        Icon.ImageColor3 = Style.Icon
+        Label.Text, Label.TextColor3 = On and "AI: ON" or "AI: OFF", Style.Text
     end
 
-    -- Main frame
-    local aiFrame = Instance.new("Frame")
-    aiFrame.Name = "aiFrame"
-    aiFrame.Size = UDim2.new(1, 0, 0.045, 0) -- Scaled size
-    aiFrame.BackgroundColor3 = config.COLORS.off.background
-    aiFrame.LayoutOrder = 99
-    aiFrame.Parent = sideFrame
+    local Corner = Instance.new("UICorner", Frame)
+    Corner.CornerRadius = UDim.new(0, 8)
 
-    -- Corners + stroke for the frame
-    local corner = Instance.new("UICorner", aiFrame)
-    corner.CornerRadius = UDim.new(0, 8)
+    local Stroke = Instance.new("UIStroke", Frame)
+    Stroke.Thickness, Stroke.Color = 1.6, Color3.fromRGB(255,170,0)
 
-    local stroke = Instance.new("UIStroke", aiFrame)
-    stroke.Thickness = 1.6
-    stroke.Color = Color3.fromRGB(255, 170, 0)
-    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    local Icon = Instance.new("ImageLabel", Frame)
+    Icon.Name, Icon.Image, Icon.AnchorPoint = "Icon", Config.ICON_IMAGE, Vector2.new(.5,.5)
+    Icon.Position, Icon.Size, Icon.BackgroundTransparency = UDim2.new(.22,0,.5,0), UDim2.new(.18,0,.18,0), 1
+    Icon.ImageTransparency = .18
+    Instance.new("UIAspectRatioConstraint", Icon).AspectRatio = 1
 
-    -- Icon
-    local icon = Instance.new("ImageLabel")
-    icon.Image = config.ICON_IMAGE --rbxassetid://84768391180077
-    icon.AnchorPoint = Vector2.new(0.5, 0.5)
-    icon.Position = UDim2.new(0.22, 0, 0.5, 0)
-    icon.Size = UDim2.new(0.18, 0, 0.18, 0)
-    icon.SizeConstraint = 1
-    icon.BackgroundTransparency = 1
-    icon.ImageColor3 = config.COLORS.off.icon
-    icon.ImageTransparency = 0.18
-    icon.Parent = aiFrame
-    -- Maintain aspect ratio
-    local aspect = Instance.new("UIAspectRatioConstraint")
-    aspect.AspectRatio = 1 -- 1:1 square
-    aspect.Parent = icon
+    local Label = Instance.new("TextLabel", Frame)
+    Label.Text, Label.AnchorPoint = "AI: OFF", Vector2.new(.5,.5)
+    Label.Position, Label.Size = UDim2.new(.65,0,.5,0), UDim2.new(.55,0,.65,0)
+    Label.FontFace = Font.new("rbxasset://fonts/families/TitilliumWeb.json", Enum.FontWeight.Regular)
+    Label.TextSize, Label.TextScaled, Label.BackgroundTransparency = 14, true, 1
+    Label.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Label
-    local label = Instance.new("TextLabel")
-    label.Text = "AI: OFF"
-    label.AnchorPoint = Vector2.new(0.5, 0.5)
-    label.Position = UDim2.new(0.65, 0, 0.5, 0)
-    label.Size = UDim2.new(0.55, 0, 0.65, 0)
-    label.FontFace = Font.new("rbxasset://fonts/families/TitilliumWeb.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    label.TextSize = 14
-    label.TextScaled = true
-    label.TextColor3 = config.COLORS.off.text
-    label.BackgroundTransparency = 1
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = aiFrame
+    local Button = Instance.new("TextButton", Frame)
+    Button.Size, Button.BackgroundTransparency, Button.AutoButtonColor = UDim2.new(1,0,1,0), 1, false
+    Instance.new("UICorner", Button).CornerRadius = UDim.new(0,8)
+    local BtnStroke = Instance.new("UIStroke", Button)
+    BtnStroke.Thickness, BtnStroke.Color = 1.6, Color3.fromRGB(255,170,0)
 
-    -- Invisible clickable layer for frame
-    local clickZone = Instance.new("TextButton")
-    clickZone.BackgroundTransparency = 1
-    clickZone.Size = UDim2.new(1, 0, 1, 0)
-    clickZone.Text = ""
-    clickZone.BackgroundColor3 = config.COLORS.off.background
-    clickZone.TextColor3 = config.COLORS.off.text
-    clickZone.AutoButtonColor = false
-    clickZone.Parent = aiFrame
-    -- Apply corner radius to the TextButton
-    local cornerTextB = Instance.new("UICorner", clickZone)
-    cornerTextB.CornerRadius = UDim.new(0, 8)
-
-    -- Add stroke to the TextButton
-    local strokeButton = Instance.new("UIStroke")
-    strokeButton.Thickness = 1.6
-    strokeButton.Color = Color3.fromRGB(255, 170, 0)
-    strokeButton.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    strokeButton.Parent = clickZone
-
-    -- update the frame's style when on/off
-    local function updateToggleStyle(isOn)
-        local style = isOn and config.COLORS.on or config.COLORS.off
-    
-        label.Text = isOn and "AI: ON" or "AI: OFF"
-        label.TextColor3 = style.text
-        icon.ImageColor3 = style.icon
-        aiFrame.BackgroundColor3 = style.background
-    end
-
-    
-    clickZone.MouseButton1Down:Connect(function()
-        state.aiRunning = not state.aiRunning
-        updateToggleStyle(state.aiRunning)
-
-        if state.aiRunning then
-            if not state.aiLoaded then
-                ai.start(modules)
-                state.aiLoaded = true
-            end
+    Button.MouseButton1Down:Connect(function()
+        State.AiRunning = not State.AiRunning
+        applyStyle(State.AiRunning)
+        if State.AiRunning and not State.AiLoaded then
+            Ai.Start(Modules)
+            State.AiLoaded = true
         end
     end)
+
     print("[LOG]: GUI loaded.")
 end
 
