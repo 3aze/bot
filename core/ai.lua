@@ -1,169 +1,103 @@
 local M = {}
 
-function M.start(modules)
-    local config = modules.config
-    local state = modules.state
+function M.Start(Modules)
+    local Config = Modules.Config
+    local State = Modules.State
 
-    -- Start new instance
-    state.aiLoaded = true
-    state.aiRunning = true
-    state.gameConnected = false
+    State.AiLoaded = true
+    State.AiRunning = true
+    State.GameConnected = false
 
     local Players = game:GetService("Players")
-    local localPlayer = Players.LocalPlayer
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local Sunfish = localPlayer:WaitForChild("PlayerScripts").AI:WaitForChild("Sunfish")
-    local ChessLocalUI = localPlayer:WaitForChild("PlayerScripts"):WaitForChild("ChessLocalUI")
+    local LocalPlayer = Players.LocalPlayer
+    local RepStorage = game:GetService("ReplicatedStorage")
 
-    local function getGameType(clockText)
-        return config.CLOCK_NAME_MAPPING[clockText] or "unknown"
+    local Sunfish = LocalPlayer.PlayerScripts.AI.Sunfish
+    local ChessUI = LocalPlayer.PlayerScripts.ChessLocalUI
+
+    local function GetGameType(ClockText)
+        return Config.ClockNameMapping[ClockText] or "Unknown"
     end
 
-    local function getSmartWait(clockText, moveCount)
-        local configRange = config.CLOCK_WAIT_MAPPING[clockText]
-        if not configRange then 
-            configRange = config.CLOCK_WAIT_MAPPING["bullet"] -- temporary fix
+    local function GetSmartWait(ClockText, MoveCount)
+        local Range = Config.ClockWaitMapping[ClockText] or Config.ClockWaitMapping["bullet"]
+        local Base = math.random(Range.Min, Range.Max)
+        if MoveCount < math.random(7,12) then
+            return Base * 0.5
+        elseif MoveCount < math.random(12,40) then
+            return GetGameType(ClockText) ~= "bullet" and Base * 4 or Base * 2
         end
-    
-        local baseWait = math.random(math.random(0, configRange.min), math.random(configRange.min, configRange.max))
-        local gameType = getGameType(clockText)
-    
-        if moveCount < math.random(7, 12) then
-            return baseWait * 0.5 -- opening
-        elseif moveCount < math.random(12, 40) then
-            return (gameType ~= "bullet") and baseWait * 4.0 or baseWait * 2.0
-        else
-            return baseWait * 1.2
-        end
+        return Base * 1.2
     end
 
-    local function getFunction(funcName, moduleName)
-        local retryCount = 0
-        local func = nil
-    
-        while retryCount < 10 and not func do
-            for _, f in ipairs(getgc(true)) do
-                if typeof(f) == "function" and debug.getinfo(f).name == funcName then
-                    if string.sub(debug.getinfo(f).source, -#moduleName) == moduleName then
-                        func = f
-                        break
-                    end
+    local function GetFunction(Name, Source)
+        for i = 1, 10 do
+            for _, fn in ipairs(getgc(true)) do
+                if typeof(fn) == "function"
+                   and debug.getinfo(fn).name == Name
+                   and debug.getinfo(fn).source:sub(-#Source) == Source then
+                    return fn
                 end
             end
-            if not func then
-                retryCount = retryCount + 1
-                task.wait(0.1)
-            end
+            task.wait(0.1)
         end
-    
-        if not func then
-            warn("Failed to find " .. funcName .. " after 10 retries.")
-        end
-        return func
+        warn("Failed to find " .. Name)
     end
 
-    local function initializeFunctions()
-        local GetBestMove = getFunction("GetBestMove", "Sunfish")
-        local PlayMove = getFunction("PlayMove", "ChessLocalUI")
-    
-        return GetBestMove, PlayMove
+    local function InitializeFunctions()
+        return GetFunction("GetBestMove", "Sunfish"), GetFunction("PlayMove", "ChessLocalUI")
     end
 
-    --[[ get ai bestmove function in Sunfish module script from garbage collector
-    local GetBestMove = nil
-    for _, f in ipairs(getgc(true)) do
-        if typeof(f) == "function" and debug.getinfo(f).name == "GetBestMove" then
-            if(string.sub(debug.getinfo(f).source, -7)=="Sunfish") then
-                GetBestMove = f
-            end
+    local function StartGameHandler(Board)
+        local GetBestMove, PlayMove = InitializeFunctions()
+        local MoveCount, GameEnded = 0, false
+
+        local function IsLocalPlayersTurn()
+            return (LocalPlayer.Name == Board.WhitePlayer.Value) == Board.WhiteToPlay.Value
         end
-    end
 
-    -- get playmove function in ChessLocalUI from garbage collector
-    local PlayMove = nil
-    for _, f in ipairs(getgc(true)) do
-        if typeof(f) == "function" and debug.getinfo(f).name == "PlayMove" then
-            PlayMove = f
-        end
-    end]]
+        local ClockLabel = Board.Clock.MainBody.SurfaceGui[
+            LocalPlayer.Name == Board.WhitePlayer.Value and "WhiteTime" or "BlackTime"
+        ]
 
-    -- Main part
-    local function startGameHandler(board)
-        local GetBestMove, PlayMove = initializeFunctions()
-        local boardLoaded = false
-        local Fen = nil
-        local move = nil
-        local gameEnded = false
-        local nbMoves = 0
-        local randWaitFromGameType = 0
-        local clockText = nil
-
-        local isLocalWhite = localPlayer.Name == board.WhitePlayer.Value
-        local clockLabel = board:WaitForChild("Clock")
-            :WaitForChild("MainBody")
-            :WaitForChild("SurfaceGui")
-            :WaitForChild(isLocalWhite and "WhiteTime" or "BlackTime")
-
-        -- wait for clock to initialize
         task.wait(0.1)
-        clockText = clockLabel.ContentText
-        randWaitFromGameType = getSmartWait(clockText, nbMoves)
-        boardLoaded = true
+        local ClockText = ClockLabel.ContentText
+        local WaitTime = GetSmartWait(ClockText, MoveCount)
 
-        -- speaks for itself
-        local function isLocalPlayersTurn()
-            local isLocalWhite = localPlayer.Name == board.WhitePlayer.Value
-            return isLocalWhite == board.WhiteToPlay.Value
-        end
-
-    -- Check for playable moves until game ends
-        local function gameLoop()
-            task.wait(3) -- game initialisation time
-
-            while not gameEnded do
-                if boardLoaded and board then
-                    Fen = board.FEN.Value
-
-                    if isLocalPlayersTurn() and Fen and state.aiRunning then 
-                        move = GetBestMove(nil, Fen, 5000)
-                        if move then
-                            task.wait(randWaitFromGameType)
-                            PlayMove(move)
-
-                            nbMoves += 1
-                            randWaitFromGameType = getSmartWait(clockText, nbMoves)
-                        end
+        coroutine.wrap(function()
+            task.wait(3)
+            while not GameEnded do
+                if IsLocalPlayersTurn() and State.AiRunning then
+                    local Fen = Board.FEN.Value
+                    local Move = GetBestMove(nil, Fen, 5000)
+                    if Move then
+                        task.wait(WaitTime)
+                        PlayMove(Move)
+                        MoveCount += 1
+                        WaitTime = GetSmartWait(ClockText, MoveCount)
                     end
                 end
                 task.wait(0.2)
             end
-        end
+        end)()
 
-        state.aiThread = coroutine.create(gameLoop)
-        coroutine.resume(state.aiThread)
-
-        ReplicatedStorage.Chess:WaitForChild("EndGameEvent").OnClientEvent:Once(function(board)
-                gameEnded = true
-                state.gameConnected = false
-                print("[LOG]: Game ended.")
+        RepStorage.Chess.EndGameEvent.OnClientEvent:Once(function()
+            GameEnded = true
+            State.GameConnected = false
+            print("[LOG]: Game ended.")
         end)
     end
 
-    -- Listener to get the board object
-    if not state.gameConnected then
-        ReplicatedStorage.Chess:WaitForChild("StartGameEvent").OnClientEvent:Connect(function(board)
-            if board then
-                if localPlayer.Name == board.WhitePlayer.Value or localPlayer.Name == board.BlackPlayer.Value then
-                    print("[LOG]: New game started.")
-                    startGameHandler(board)
-                end
-            else
-                warn("Invalid board, try restarting a chess game.")
+    if not State.GameConnected then
+        RepStorage.Chess.StartGameEvent.OnClientEvent:Connect(function(Board)
+            if Board and (LocalPlayer.Name == Board.WhitePlayer.Value or LocalPlayer.Name == Board.BlackPlayer.Value) then
+                print("[LOG]: New game started.")
+                StartGameHandler(Board)
             end
         end)
-        state.gameConnected = true
+        State.GameConnected = true
     else
-        warn("Game instance already existing, restart chess club")
+        warn("Game instance already exists.")
     end
 end
 
