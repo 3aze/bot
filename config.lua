@@ -1,35 +1,32 @@
-local config = {}
+local Config = {}
 
--- Clock to wait-time ranges
-config.CLOCK_WAIT_MAPPING = {
-    ["∞"] = {min = 4, max = 7},
-    ["1:00"] = {min = 0, max = 1},
-    ["3:00"] = {min = 2, max = 3},
-    ["10:00"] = {min = 4, max = 7},
+Config.ClockWaitMapping = {
+    ["∞"]   = { Min = 4, Max = 7 },
+    ["1:00"] = { Min = 0, Max = 1 },
+    ["3:00"] = { Min = 2, Max = 3 },
+    ["10:00"] = { Min = 4, Max = 7 },
 }
 
--- Clock to game type
-config.CLOCK_NAME_MAPPING = {
-    ["1:00"] = "bullet",
-    ["3:00"] = "blitz",
-    ["10:00"] = "rapid",
-    ["∞"] = "casual",
+Config.ClockNameMapping = {
+    ["1:00"]  = "Bullet",
+    ["3:00"]  = "Blitz",
+    ["10:00"] = "Rapid",
+    ["∞"]    = "Casual",
 }
 
--- Icon and colors
-config.ICON_IMAGE = "http://www.roblox.com/asset/?id=95384848753847"
+Config.IconImage = "http://www.roblox.com/asset/?id=95384848753847"
 
-config.COLORS = {
-    on = {
-        background = Color3.fromRGB(255, 170, 0),
-        text = Color3.fromRGB(22, 16, 12),
-        icon = Color3.fromRGB(22, 16, 12),
+Config.Colors = {
+    On = {
+        Background = Color3.fromRGB(255, 170, 0),
+        Text       = Color3.fromRGB(22,  16, 12),
+        Icon       = Color3.fromRGB(22,  16, 12),
     },
-    off = {
-        background = Color3.fromRGB(22, 16, 12),
-        text = Color3.fromRGB(255, 170, 0),
-        icon = Color3.fromRGB(255, 170, 0)
+    Off = {
+        Background = Color3.fromRGB(22,  16, 12),
+        Text       = Color3.fromRGB(255, 170, 0),
+        Icon       = Color3.fromRGB(255, 170, 0),
     }
 }
 
-return config
+return Config
